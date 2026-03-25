@@ -1,5 +1,5 @@
-// App.js - Complete Vehicle Management System with Camera QR Scanning
-// OTA Updates enabled | Slug: vhs | Project: c0f98bee-ef20-4e55-8770-de0783268608
+// App.js - Vehicle Management System with Camera QR Scanning
+// Works with Expo SDK 51
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
@@ -24,22 +24,20 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon, Card, Button, Input, Chip, Badge } from 'react-native-elements';
 import * as Updates from 'expo-updates';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Camera, CameraView } from 'expo-camera';
 
 // ============================================
-// OTA UPDATE HANDLER — AUTO APPLY
+// OTA UPDATE HANDLER
 // ============================================
 async function checkForOTAUpdate() {
   try {
-    if (__DEV__) return; // Skip OTA in dev mode
+    if (__DEV__) return;
     const update = await Updates.checkForUpdateAsync();
     if (update.isAvailable) {
       await Updates.fetchUpdateAsync();
-      // Auto reload immediately — no user prompt needed
       await Updates.reloadAsync();
     }
   } catch (error) {
-    // Silently ignore — OTA failure should never crash the app
     console.log('OTA check error:', error.message);
   }
 }
@@ -68,24 +66,24 @@ async function apiRequest(method, endpoint, body = null, requiresAuth = true) {
 
   try {
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout - server not responding')), 30000)
+      setTimeout(() => reject(new Error('Request timeout')), 30000)
     );
     const fetchPromise = fetch(`${BASE_URL}${endpoint}`, config);
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Server error: ${response.status} - ${text.substring(0, 100)}`);
+      throw new Error(`Server error: ${response.status}`);
     }
 
     const responseText = await response.text();
     try {
       return JSON.parse(responseText);
     } catch {
-      throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+      throw new Error(`Invalid JSON response`);
     }
   } catch (error) {
-    console.error(`API request failed for ${endpoint}:`, error);
+    console.error(`API request failed:`, error);
     throw error;
   }
 }
@@ -133,27 +131,33 @@ const checkDuplicate = (scanned_data) =>
 // ============================================
 const Stack = createNativeStackNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns: 12px side padding each side + 12px gap
+const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
 // ============================================
-// QR Scanner Modal Component (Reusable)
+// QR Scanner Modal Component
 // ============================================
 function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState(null);
   const [torchOn, setTorchOn] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setScanned(false);
       setTorchOn(false);
+      setShowManual(false);
+      (async () => {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        setHasPermission(status === 'granted');
+      })();
     }
   }, [visible]);
 
   const handleBarCodeScanned = ({ data }) => {
     if (scanned) return;
     setScanned(true);
-    // Vibrate on successful scan
     if (Platform.OS !== 'web' && Vibration) {
       Vibration.vibrate(100);
     }
@@ -161,7 +165,53 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
     onClose();
   };
 
-  if (!permission) {
+  const handleManualSubmit = () => {
+    if (manualInput.trim()) {
+      onScan(manualInput.trim());
+      onClose();
+      setManualInput('');
+    } else {
+      Alert.alert('Error', 'Please enter a QR code value');
+    }
+  };
+
+  if (showManual) {
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false}>
+        <View style={stylesScanner.modalContainer}>
+          <View style={stylesScanner.manualHeader}>
+            <TouchableOpacity onPress={() => setShowManual(false)} style={stylesScanner.closeBtn}>
+              <Icon name="arrow-left" type="material-community" size={28} color="#333" />
+            </TouchableOpacity>
+            <Text style={stylesScanner.manualTitle}>Manual Entry</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <Text style={stylesScanner.manualText}>Enter QR Code Value:</Text>
+          <TextInput
+            style={stylesScanner.manualInput}
+            value={manualInput}
+            onChangeText={setManualInput}
+            placeholder="Enter QR code"
+            autoCapitalize="none"
+            autoFocus
+          />
+          <Button
+            title="Submit"
+            onPress={handleManualSubmit}
+            buttonStyle={{ backgroundColor: '#1a73e8', borderRadius: 10, marginTop: 20 }}
+          />
+          <Button
+            title="Back to Scanner"
+            type="outline"
+            onPress={() => setShowManual(false)}
+            containerStyle={{ marginTop: 12 }}
+          />
+        </View>
+      </Modal>
+    );
+  }
+
+  if (hasPermission === null) {
     return (
       <Modal visible={visible} animationType="slide" transparent={false}>
         <View style={stylesScanner.modalContainer}>
@@ -172,7 +222,7 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
     );
   }
 
-  if (!permission.granted) {
+  if (hasPermission === false) {
     return (
       <Modal visible={visible} animationType="slide" transparent={false}>
         <View style={stylesScanner.modalContainer}>
@@ -180,7 +230,7 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
           <Text style={[stylesScanner.modalText, { marginTop: 16, marginBottom: 16 }]}>
             Camera access is required to scan QR codes
           </Text>
-          <Button title="Grant Permission" onPress={requestPermission} buttonStyle={{ backgroundColor: '#1a73e8' }} />
+          <Button title="Enter Manually" onPress={() => setShowManual(true)} buttonStyle={{ backgroundColor: '#1a73e8' }} />
           <Button title="Cancel" type="outline" onPress={onClose} containerStyle={{ marginTop: 12 }} />
         </View>
       </Modal>
@@ -212,6 +262,12 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
             <View style={stylesScanner.scanArea}>
               <View style={stylesScanner.scanFrame} />
               <Text style={stylesScanner.scanText}>Align QR code within frame</Text>
+              <TouchableOpacity 
+                onPress={() => setShowManual(true)}
+                style={stylesScanner.manualEntryBtn}
+              >
+                <Text style={stylesScanner.manualEntryText}>Enter manually</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </CameraView>
@@ -253,8 +309,38 @@ const stylesScanner = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
+  manualEntryBtn: {
+    marginTop: 30,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+  },
+  manualEntryText: { color: '#fff', fontSize: 14 },
   modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 24 },
   modalText: { fontSize: 16, color: '#333', textAlign: 'center', marginTop: 12 },
+  manualHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 56 : 40,
+    paddingHorizontal: 20,
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingBottom: 16,
+  },
+  manualTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  manualText: { fontSize: 16, color: '#333', marginTop: 40, marginBottom: 16 },
+  manualInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
 });
 
 // ============================================
@@ -285,7 +371,7 @@ function LoginScreen({ navigation }) {
         Alert.alert('Login Failed', res.message || 'Invalid credentials');
       }
     } catch (err) {
-      Alert.alert('Error', err.message || 'Network error. Check your connection.');
+      Alert.alert('Error', err.message || 'Network error');
     } finally {
       setLoading(false);
     }
@@ -360,7 +446,7 @@ const stylesLogin = StyleSheet.create({
 });
 
 // ============================================
-// Dashboard Screen — FIXED LAYOUT
+// Dashboard Screen
 // ============================================
 function DashboardScreen({ navigation }) {
   const [stats, setStats] = useState(null);
@@ -430,7 +516,6 @@ function DashboardScreen({ navigation }) {
       style={stylesDash.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {/* Header */}
       <View style={stylesDash.header}>
         <View>
           <Text style={stylesDash.greeting}>Hello, {user?.name || 'User'} 👋</Text>
@@ -441,15 +526,11 @@ function DashboardScreen({ navigation }) {
             titleStyle={{ color: '#fff' }}
           />
         </View>
-        <TouchableOpacity
-          onPress={handleLogout}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
+        <TouchableOpacity onPress={handleLogout} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Icon name="logout" type="material-community" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Stats — fixed 2-column grid using CARD_WIDTH */}
       {stats && (
         <>
           <Text style={stylesDash.sectionTitle}>Today's Overview</Text>
@@ -468,7 +549,6 @@ function DashboardScreen({ navigation }) {
         </>
       )}
 
-      {/* Quick Actions — fixed 2-column grid */}
       <Text style={stylesDash.sectionTitle}>Quick Actions</Text>
       <View style={stylesDash.menuGrid}>
         {allowedMenus.map((item) => (
@@ -563,7 +643,7 @@ const stylesDash = StyleSheet.create({
 });
 
 // ============================================
-// Gate In Screen with Camera
+// Gate In Screen
 // ============================================
 function GateInScreen({ navigation }) {
   const [form, setForm] = useState({
@@ -582,7 +662,6 @@ function GateInScreen({ navigation }) {
   const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   const handleScan = async (scannedData) => {
-    // Check for duplicate vehicle still in premises
     try {
       const checkRes = await checkDuplicate(scannedData);
       if (checkRes.success && checkRes.is_duplicate && !checkRes.has_exited) {
@@ -594,10 +673,8 @@ function GateInScreen({ navigation }) {
       console.log('Duplicate check error:', err);
     }
     
-    // Proceed with filling form
     update('scanned_data', scannedData);
     
-    // Optionally fetch vehicle details if available
     try {
       const infoRes = await getVehicleInfo(scannedData);
       if (infoRes.success && infoRes.data) {
@@ -660,7 +737,6 @@ function GateInScreen({ navigation }) {
             <Text style={[stylesForm.cardTitle, { color: '#1a73e8' }]}>Gate In Entry</Text>
           </View>
 
-          {/* Scan Button */}
           <Button
             title="Scan QR Code"
             onPress={() => setScannerVisible(true)}
@@ -702,7 +778,6 @@ function GateInScreen({ navigation }) {
         title="Scan Gate In QR"
       />
 
-      {/* Duplicate Alert Modal */}
       <Modal visible={duplicateAlert} transparent animationType="fade">
         <View style={stylesForm.modalOverlay}>
           <Card containerStyle={stylesForm.modalCard}>
@@ -724,7 +799,7 @@ function GateInScreen({ navigation }) {
 }
 
 // ============================================
-// Gate Out Screen with Camera
+// Gate Out Screen
 // ============================================
 function GateOutScreen({ navigation }) {
   const [scannedData, setScannedData] = useState('');
@@ -743,7 +818,6 @@ function GateOutScreen({ navigation }) {
       const res = await getVehicleInfo(data);
       if (res.success) {
         setVehicleInfo(res.data);
-        // Auto-populate form with known data if available
         if (res.data.km_reading) update('km_reading', res.data.km_reading);
         if (res.data.name) update('name', res.data.name);
       } else {
@@ -878,7 +952,6 @@ function GateOutScreen({ navigation }) {
   );
 }
 
-// Shared form styles
 const stylesForm = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   card: { borderRadius: 12, padding: 20 },
@@ -894,7 +967,7 @@ const stylesForm = StyleSheet.create({
 });
 
 // ============================================
-// Stock Screen with Camera & Multi-Scan
+// Stock Screen
 // ============================================
 function StockScreen({ navigation }) {
   const LOCATIONS = [
@@ -907,12 +980,10 @@ function StockScreen({ navigation }) {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [tempScan, setTempScan] = useState('');
 
   const needsName = ['Road Test', 'Vehicle Refuel', 'OSL Work'].includes(location);
 
   const handleScan = (data) => {
-    // Check for duplicate
     if (scannedItems.includes(data)) {
       Alert.alert('Duplicate Scan', 'This QR code has already been scanned.');
       if (Platform.OS !== 'web' && Vibration) {
@@ -924,7 +995,6 @@ function StockScreen({ navigation }) {
       Vibration.vibrate(100);
     }
     setScannedItems(prev => [...prev, data]);
-    setTempScan('');
   };
 
   const removeScan = (index) => {
@@ -1010,7 +1080,6 @@ function StockScreen({ navigation }) {
             <Chip title={location} containerStyle={{ marginTop: 8 }} buttonStyle={{ backgroundColor: '#FF9800' }} />
           </View>
 
-          {/* Scanned Items List */}
           <Text style={stylesStock.sectionLabel}>Scanned QR Codes ({scannedItems.length})</Text>
           {scannedItems.length === 0 ? (
             <Text style={{ color: '#aaa', textAlign: 'center', marginVertical: 12 }}>No scans yet. Tap "Scan QR" to add.</Text>
@@ -1308,7 +1377,6 @@ export default function App() {
   const [initialRoute, setInitialRoute] = useState(null);
 
   useEffect(() => {
-    // ✅ OTA check runs ONCE at app startup
     checkForOTAUpdate();
 
     AsyncStorage.getItem('auth_token').then((token) => {
