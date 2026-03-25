@@ -21,14 +21,28 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.vms.app"
+      "bundleIdentifier": "com.vms.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "VMS needs camera access to scan QR codes.",
+        "NSLocationWhenInUseUsageDescription": "VMS needs location to track vehicle positions.",
+        "NSLocationAlwaysUsageDescription": "VMS needs location to track vehicle positions.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "VMS needs location to track vehicle positions."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.jpeg",
         "backgroundColor": "#1a73e8"
       },
-      "package": "com.vms.app"
+      "package": "com.vms.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,6 +52,29 @@
         "projectId": "c0f98bee-ef20-4e55-8770-de0783268608"
       }
     },
-    "plugins": ["expo-updates"]
+    "plugins": [
+      "expo-updates",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "VMS needs camera access to scan QR codes for Gate In, Gate Out and Stock updates."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "VMS needs location to track vehicle positions.",
+          "locationWhenInUsePermission": "VMS needs location to track vehicle positions."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.jpeg",
+          "color": "#1a73e8",
+          "defaultChannel": "default"
+        }
+      ]
+    ]
   }
 }
