@@ -385,7 +385,7 @@ function LoginScreen({ navigation }) {
       <Card containerStyle={stylesLogin.card}>
         <View style={stylesLogin.header}>
           <Icon name="car" type="material-community" size={60} color="#1a73e8" />
-          <Text style={stylesLogin.title}>VMS</Text>
+          <Text style={stylesLogin.title}>VMS, </Text>
           <Text style={stylesLogin.subtitle}>Vehicle Management System</Text>
         </View>
 
@@ -454,7 +454,7 @@ function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const MENU_ITEMS = [
-    { label: 'Gate In',      screen: 'GateIn',   roles: ['Admi', 'Security'],           icon: 'login',           color: '#4CAF50' },
+    { label: 'Gate In',      screen: 'GateIn',   roles: ['Admin', 'Security'],           icon: 'login',           color: '#4CAF50' },
     { label: 'Gate Out',     screen: 'GateOut',  roles: ['Admin', 'Security', 'Manager'], icon: 'logout',          color: '#F44336' },
     { label: 'Stock Update', screen: 'Stock',    roles: ['Admin', 'Security', 'Manager'], icon: 'package-variant', color: '#FF9800' },
     { label: 'Search',       screen: 'Search',   roles: ['Admin', 'Security', 'Manager'], icon: 'magnify',         color: '#2196F3' },
