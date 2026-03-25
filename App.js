@@ -385,7 +385,7 @@ function LoginScreen({ navigation }) {
       <Card containerStyle={stylesLogin.card}>
         <View style={stylesLogin.header}>
           <Icon name="car" type="material-community" size={60} color="#1a73e8" />
-          <Text style={stylesLogin.title}>VMS</Text>
+          <Text style={stylesLogin.title}>VMS hgh</Text>
           <Text style={stylesLogin.subtitle}>Vehicle Management System</Text>
         </View>
 
