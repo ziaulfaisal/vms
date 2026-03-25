@@ -305,7 +305,7 @@ function DashboardScreen({ navigation }) {
       {/* Header */}
       <View style={stylesDash.header}>
         <View>
-          <Text style={stylesDash.greeting}>Hello, {user?.name || 'User'} 👋</Text>
+          <Text style={stylesDash.greeting}>Hell  o, {user?.name || 'User'} 👋</Text>
           <Chip
             title={user?.role || 'Guest'}
             type="outline"
