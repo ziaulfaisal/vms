@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "VMS",
+    "slug": "vhs",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.jpeg",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a73e8"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/c0f98bee-ef20-4e55-8770-de0783268608"
+    },
+    "runtimeVersion": "1.0.0",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vms.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.jpeg",
+        "backgroundColor": "#1a73e8"
+      },
+      "package": "com.vms.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c0f98bee-ef20-4e55-8770-de0783268608"
+      }
+    },
+    "plugins": ["expo-updates"]
+  }
+}
