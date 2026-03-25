@@ -1,0 +1,60 @@
+name: Build APK & OTA Update
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ============================================
+  # JOB 1: OTA Update (runs every push)
+  # ============================================
+  ota-update:
+    name: OTA Update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Publish OTA Update
+        run: eas update --branch preview --message "Auto OTA - ${{ github.event.head_commit.message }}" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # ============================================
+  # JOB 2: Build APK (only when you add [BUILD] in commit message)
+  # ============================================
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[BUILD]')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build Android APK
+        run: eas build --profile preview --platform android --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
