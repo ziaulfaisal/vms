@@ -385,7 +385,7 @@ function LoginScreen({ navigation }) {
       <Card containerStyle={stylesLogin.card}>
         <View style={stylesLogin.header}>
           <Icon name="car" type="material-community" size={60} color="#1a73e8" />
-          <Text style={stylesLogin.title}>VMS</Text>
+          <Text style={stylesLogin.title}>VMSx </Text>
           <Text style={stylesLogin.subtitle}>Vehicle Management System</Text>
         </View>
 
@@ -518,7 +518,7 @@ function DashboardScreen({ navigation }) {
     >
       <View style={stylesDash.header}>
         <View>
-          <Text style={stylesDash.greeting}>Hello, {user?.name || 'User'} 👋</Text>
+          <Text style={stylesDash.greeting}>Hell o, {user?.name || 'User'} 👋</Text>
           <Chip
             title={user?.role || 'Guest'}
             type="outline"
