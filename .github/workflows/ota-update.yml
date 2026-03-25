@@ -26,6 +26,6 @@ jobs:
         run: npm install -g eas-cli
 
       - name: Publish OTA Update to Preview
-        run: eas bluid --branch preview --message "Auto update from GitHub" --non-interactive
+        run: eas update --branch preview --message "Auto update from GitHub" --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
