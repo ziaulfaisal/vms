@@ -1,7 +1,7 @@
-// App.js - Complete Vehicle Management System
+// App.js - Complete Vehicle Management System with Camera QR Scanning
 // OTA Updates enabled | Slug: vhs | Project: c0f98bee-ef20-4e55-8770-de0783268608
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +15,16 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  TextInput,
+  Vibration,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon, Card, Button, Input, Chip, Badge } from 'react-native-elements';
 import * as Updates from 'expo-updates';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 // ============================================
 // OTA UPDATE HANDLER — AUTO APPLY
@@ -121,6 +125,8 @@ const getVehicleInfo = (scanned_data) =>
 const searchVehicles = (q = '') =>
   apiRequest('GET', `/api/search?q=${encodeURIComponent(q)}`, null, true);
 const getReports = () => apiRequest('GET', '/api/reports', null, true);
+const checkDuplicate = (scanned_data) =>
+  apiRequest('GET', `/api/check_duplicate?scanned_data=${encodeURIComponent(scanned_data)}`, null, true);
 
 // ============================================
 // Navigation Stack
@@ -128,6 +134,128 @@ const getReports = () => apiRequest('GET', '/api/reports', null, true);
 const Stack = createNativeStackNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2; // 2 columns: 12px side padding each side + 12px gap
+
+// ============================================
+// QR Scanner Modal Component (Reusable)
+// ============================================
+function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [torchOn, setTorchOn] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setScanned(false);
+      setTorchOn(false);
+    }
+  }, [visible]);
+
+  const handleBarCodeScanned = ({ data }) => {
+    if (scanned) return;
+    setScanned(true);
+    // Vibrate on successful scan
+    if (Platform.OS !== 'web' && Vibration) {
+      Vibration.vibrate(100);
+    }
+    onScan(data);
+    onClose();
+  };
+
+  if (!permission) {
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false}>
+        <View style={stylesScanner.modalContainer}>
+          <ActivityIndicator size="large" color="#1a73e8" />
+          <Text style={stylesScanner.modalText}>Requesting camera permission...</Text>
+        </View>
+      </Modal>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false}>
+        <View style={stylesScanner.modalContainer}>
+          <Icon name="camera-off" type="material-community" size={60} color="#E53935" />
+          <Text style={[stylesScanner.modalText, { marginTop: 16, marginBottom: 16 }]}>
+            Camera access is required to scan QR codes
+          </Text>
+          <Button title="Grant Permission" onPress={requestPermission} buttonStyle={{ backgroundColor: '#1a73e8' }} />
+          <Button title="Cancel" type="outline" onPress={onClose} containerStyle={{ marginTop: 12 }} />
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false}>
+      <View style={stylesScanner.fullScreen}>
+        <CameraView
+          style={stylesScanner.camera}
+          facing="back"
+          onBarcodeScanned={handleBarCodeScanned}
+          enableTorch={torchOn}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'pdf417', 'aztec'],
+          }}
+        >
+          <View style={stylesScanner.overlay}>
+            <View style={stylesScanner.header}>
+              <TouchableOpacity onPress={onClose} style={stylesScanner.closeBtn}>
+                <Icon name="close" type="material-community" size={28} color="#fff" />
+              </TouchableOpacity>
+              <Text style={stylesScanner.headerTitle}>{title}</Text>
+              <TouchableOpacity onPress={() => setTorchOn(!torchOn)} style={stylesScanner.torchBtn}>
+                <Icon name={torchOn ? "flashlight" : "flashlight-off"} type="material-community" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <View style={stylesScanner.scanArea}>
+              <View style={stylesScanner.scanFrame} />
+              <Text style={stylesScanner.scanText}>Align QR code within frame</Text>
+            </View>
+          </View>
+        </CameraView>
+      </View>
+    </Modal>
+  );
+}
+
+const stylesScanner = StyleSheet.create({
+  fullScreen: { flex: 1, backgroundColor: '#000' },
+  camera: { flex: 1 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'space-between' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 56 : 40,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  closeBtn: { padding: 8 },
+  torchBtn: { padding: 8 },
+  scanArea: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  scanFrame: {
+    width: 250,
+    height: 250,
+    borderWidth: 2,
+    borderColor: '#fff',
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  scanText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 24 },
+  modalText: { fontSize: 16, color: '#333', textAlign: 'center', marginTop: 12 },
+});
 
 // ============================================
 // Login Screen
@@ -384,7 +512,6 @@ const stylesDash = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
   },
-  // ✅ FIX: explicit pixel width via CARD_WIDTH — no flex conflict
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -406,7 +533,6 @@ const stylesDash = StyleSheet.create({
   },
   statValue: { fontSize: 28, fontWeight: 'bold', marginTop: 8 },
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
-  // ✅ FIX: same CARD_WIDTH pattern for menu
   menuGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -437,7 +563,7 @@ const stylesDash = StyleSheet.create({
 });
 
 // ============================================
-// Gate In Screen
+// Gate In Screen with Camera
 // ============================================
 function GateInScreen({ navigation }) {
   const [form, setForm] = useState({
@@ -449,8 +575,42 @@ function GateInScreen({ navigation }) {
     mobile_number: '',
   });
   const [loading, setLoading] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [duplicateAlert, setDuplicateAlert] = useState(false);
+  const [duplicateData, setDuplicateData] = useState('');
 
   const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  const handleScan = async (scannedData) => {
+    // Check for duplicate vehicle still in premises
+    try {
+      const checkRes = await checkDuplicate(scannedData);
+      if (checkRes.success && checkRes.is_duplicate && !checkRes.has_exited) {
+        setDuplicateData(scannedData);
+        setDuplicateAlert(true);
+        return;
+      }
+    } catch (err) {
+      console.log('Duplicate check error:', err);
+    }
+    
+    // Proceed with filling form
+    update('scanned_data', scannedData);
+    
+    // Optionally fetch vehicle details if available
+    try {
+      const infoRes = await getVehicleInfo(scannedData);
+      if (infoRes.success && infoRes.data) {
+        update('vehicle_number', infoRes.data.vehicle_number || '');
+        update('make', infoRes.data.make || '');
+        update('model', infoRes.data.model || '');
+        update('km_reading', infoRes.data.km_reading || '');
+        update('mobile_number', infoRes.data.mobile_number || '');
+      }
+    } catch (err) {
+      console.log('Fetch vehicle info error:', err);
+    }
+  };
 
   const handleSubmit = async () => {
     const required = ['scanned_data', 'vehicle_number', 'make', 'model', 'km_reading', 'mobile_number'];
@@ -483,7 +643,7 @@ function GateInScreen({ navigation }) {
   };
 
   const FIELDS = [
-    { key: 'scanned_data',   placeholder: 'QR / Scanned Data *', icon: 'qrcode',      keyboard: 'default',    caps: 'none'       },
+    { key: 'scanned_data',   placeholder: 'QR / Scanned Data *', icon: 'qrcode',      keyboard: 'default',    caps: 'none',  readonly: true },
     { key: 'vehicle_number', placeholder: 'Vehicle Number *',     icon: 'car',         keyboard: 'default',    caps: 'characters' },
     { key: 'make',           placeholder: 'Make *',               icon: 'factory',     keyboard: 'default',    caps: 'words'      },
     { key: 'model',          placeholder: 'Model *',              icon: 'car-info',    keyboard: 'default',    caps: 'words'      },
@@ -492,43 +652,79 @@ function GateInScreen({ navigation }) {
   ];
 
   return (
-    <ScrollView style={stylesForm.container} contentContainerStyle={{ padding: 16 }}>
-      <Card containerStyle={stylesForm.card}>
-        <View style={stylesForm.header}>
-          <Icon name="login" type="material-community" size={48} color="#1a73e8" />
-          <Text style={[stylesForm.cardTitle, { color: '#1a73e8' }]}>Gate In Entry</Text>
-        </View>
+    <>
+      <ScrollView style={stylesForm.container} contentContainerStyle={{ padding: 16 }}>
+        <Card containerStyle={stylesForm.card}>
+          <View style={stylesForm.header}>
+            <Icon name="login" type="material-community" size={48} color="#1a73e8" />
+            <Text style={[stylesForm.cardTitle, { color: '#1a73e8' }]}>Gate In Entry</Text>
+          </View>
 
-        {FIELDS.map((field) => (
-          <Input
-            key={field.key}
-            placeholder={field.placeholder}
-            leftIcon={<Icon name={field.icon} type="material-community" size={20} color="#1a73e8" />}
-            value={form[field.key]}
-            onChangeText={(v) => update(field.key, v)}
-            keyboardType={field.keyboard}
-            autoCapitalize={field.caps}
-            containerStyle={stylesForm.inputContainer}
+          {/* Scan Button */}
+          <Button
+            title="Scan QR Code"
+            onPress={() => setScannerVisible(true)}
+            buttonStyle={{ backgroundColor: '#1a73e8', borderRadius: 10, marginBottom: 16 }}
+            icon={<Icon name="qrcode-scan" type="material-community" size={20} color="#fff" />}
           />
-        ))}
 
-        <Button
-          title="Submit Gate In"
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={loading}
-          buttonStyle={[stylesForm.btn, { backgroundColor: '#1a73e8' }]}
-          titleStyle={stylesForm.btnText}
-          icon={<Icon name="check" type="material-community" size={20} color="#fff" />}
-          iconRight
-        />
-      </Card>
-    </ScrollView>
+          {FIELDS.map((field) => (
+            <Input
+              key={field.key}
+              placeholder={field.placeholder}
+              leftIcon={<Icon name={field.icon} type="material-community" size={20} color="#1a73e8" />}
+              value={form[field.key]}
+              onChangeText={(v) => update(field.key, v)}
+              keyboardType={field.keyboard}
+              autoCapitalize={field.caps}
+              containerStyle={stylesForm.inputContainer}
+              editable={!field.readonly}
+            />
+          ))}
+
+          <Button
+            title="Submit Gate In"
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={loading}
+            buttonStyle={[stylesForm.btn, { backgroundColor: '#1a73e8' }]}
+            titleStyle={stylesForm.btnText}
+            icon={<Icon name="check" type="material-community" size={20} color="#fff" />}
+            iconRight
+          />
+        </Card>
+      </ScrollView>
+
+      <QRScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleScan}
+        title="Scan Gate In QR"
+      />
+
+      {/* Duplicate Alert Modal */}
+      <Modal visible={duplicateAlert} transparent animationType="fade">
+        <View style={stylesForm.modalOverlay}>
+          <Card containerStyle={stylesForm.modalCard}>
+            <Icon name="alert" type="material-community" size={48} color="#F44336" />
+            <Text style={stylesForm.modalTitle}>Vehicle Already Registered</Text>
+            <Text style={stylesForm.modalText}>
+              Token No: {duplicateData}{'\n'}
+              Status: This vehicle is already in the premises and has not exited yet.
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+              <Button title="Scan Another" onPress={() => setDuplicateAlert(false)} buttonStyle={{ backgroundColor: '#856404' }} />
+              <Button title="Close" type="outline" onPress={() => setDuplicateAlert(false)} />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+    </>
   );
 }
 
 // ============================================
-// Gate Out Screen
+// Gate Out Screen with Camera
 // ============================================
 function GateOutScreen({ navigation }) {
   const [scannedData, setScannedData] = useState('');
@@ -536,16 +732,20 @@ function GateOutScreen({ navigation }) {
   const [looking, setLooking] = useState(false);
   const [form, setForm] = useState({ km_reading: '', name: '', contact: '', drop_by: '' });
   const [loading, setLoading] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
 
   const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
-  const fetchVehicle = async () => {
-    if (!scannedData.trim()) return;
+  const handleScan = async (data) => {
+    setScannedData(data);
     setLooking(true);
     try {
-      const res = await getVehicleInfo(scannedData.trim());
+      const res = await getVehicleInfo(data);
       if (res.success) {
         setVehicleInfo(res.data);
+        // Auto-populate form with known data if available
+        if (res.data.km_reading) update('km_reading', res.data.km_reading);
+        if (res.data.name) update('name', res.data.name);
       } else {
         Alert.alert('Not Found', res.message);
         setVehicleInfo(null);
@@ -585,80 +785,96 @@ function GateOutScreen({ navigation }) {
   };
 
   const OUT_FIELDS = [
-    { key: 'km_reading', placeholder: 'KM Reading',     icon: 'speedometer',   keyboard: 'numeric'   },
-    { key: 'name',       placeholder: 'Customer Name',  icon: 'account',       keyboard: 'default'   },
-    { key: 'contact',    placeholder: 'Contact',        icon: 'phone',         keyboard: 'phone-pad' },
-    { key: 'drop_by',    placeholder: 'Drop By',        icon: 'account-check', keyboard: 'default'   },
+    { key: 'km_reading', placeholder: 'KM Reading *',     icon: 'speedometer',   keyboard: 'numeric'   },
+    { key: 'name',       placeholder: 'Customer Name *',  icon: 'account',       keyboard: 'default'   },
+    { key: 'contact',    placeholder: 'Contact *',        icon: 'phone',         keyboard: 'phone-pad' },
+    { key: 'drop_by',    placeholder: 'Drop By *',        icon: 'account-check', keyboard: 'default'   },
   ];
 
   return (
-    <ScrollView style={stylesForm.container} contentContainerStyle={{ padding: 16 }}>
-      <Card containerStyle={stylesForm.card}>
-        <View style={stylesForm.header}>
-          <Icon name="logout" type="material-community" size={48} color="#E53935" />
-          <Text style={[stylesForm.cardTitle, { color: '#E53935' }]}>Gate Out Entry</Text>
-        </View>
+    <>
+      <ScrollView style={stylesForm.container} contentContainerStyle={{ padding: 16 }}>
+        <Card containerStyle={stylesForm.card}>
+          <View style={stylesForm.header}>
+            <Icon name="logout" type="material-community" size={48} color="#E53935" />
+            <Text style={[stylesForm.cardTitle, { color: '#E53935' }]}>Gate Out Entry</Text>
+          </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Input
-            placeholder="QR / Scanned Data *"
-            leftIcon={<Icon name="qrcode" type="material-community" size={20} color="#E53935" />}
-            value={scannedData}
-            onChangeText={setScannedData}
-            containerStyle={[stylesForm.inputContainer, { flex: 1, marginRight: 8 }]}
-          />
           <Button
-            title="Fetch"
-            onPress={fetchVehicle}
-            loading={looking}
-            disabled={looking}
-            buttonStyle={{ backgroundColor: '#1a73e8', borderRadius: 8, paddingHorizontal: 16, height: 48 }}
+            title="Scan QR Code"
+            onPress={() => setScannerVisible(true)}
+            buttonStyle={{ backgroundColor: '#E53935', borderRadius: 10, marginBottom: 16 }}
+            icon={<Icon name="qrcode-scan" type="material-community" size={20} color="#fff" />}
           />
-        </View>
 
-        {vehicleInfo && (
-          <Card containerStyle={{ backgroundColor: '#e8f0fe', borderRadius: 10, padding: 12, marginBottom: 16 }}>
-            <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1a73e8', marginBottom: 8 }}>
-              Vehicle Details
-            </Text>
-            {[
-              { icon: 'car',      label: `Vehicle: ${vehicleInfo.vehicle_number || '—'}` },
-              { icon: 'factory',  label: `Make: ${vehicleInfo.make || '—'}` },
-              { icon: 'car-info', label: `Model: ${vehicleInfo.model || '—'}` },
-              { icon: 'clock',    label: `Gate In: ${vehicleInfo.gate_in_time || '—'}` },
-            ].map((row) => (
-              <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 3 }}>
-                <Icon name={row.icon} type="material-community" size={15} color="#1a73e8" />
-                <Text style={{ fontSize: 13, color: '#222', marginLeft: 8 }}>{row.label}</Text>
-              </View>
-            ))}
-          </Card>
-        )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <Input
+              placeholder="Scanned Data *"
+              leftIcon={<Icon name="qrcode" type="material-community" size={20} color="#E53935" />}
+              value={scannedData}
+              editable={false}
+              containerStyle={[stylesForm.inputContainer, { flex: 1, marginRight: 8 }]}
+            />
+            <Button
+              title="Fetch"
+              onPress={() => scannedData && handleScan(scannedData)}
+              loading={looking}
+              disabled={looking || !scannedData}
+              buttonStyle={{ backgroundColor: '#1a73e8', borderRadius: 8, paddingHorizontal: 16, height: 48 }}
+            />
+          </View>
 
-        {OUT_FIELDS.map((field) => (
-          <Input
-            key={field.key}
-            placeholder={field.placeholder}
-            leftIcon={<Icon name={field.icon} type="material-community" size={20} color="#E53935" />}
-            value={form[field.key]}
-            onChangeText={(v) => update(field.key, v)}
-            keyboardType={field.keyboard}
-            containerStyle={stylesForm.inputContainer}
+          {vehicleInfo && (
+            <Card containerStyle={{ backgroundColor: '#e8f0fe', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+              <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1a73e8', marginBottom: 8 }}>
+                Vehicle Details
+              </Text>
+              {[
+                { icon: 'car',      label: `Vehicle: ${vehicleInfo.vehicle_number || '—'}` },
+                { icon: 'factory',  label: `Make: ${vehicleInfo.make || '—'}` },
+                { icon: 'car-info', label: `Model: ${vehicleInfo.model || '—'}` },
+                { icon: 'clock',    label: `Gate In: ${vehicleInfo.gate_in_time || '—'}` },
+              ].map((row) => (
+                <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 3 }}>
+                  <Icon name={row.icon} type="material-community" size={15} color="#1a73e8" />
+                  <Text style={{ fontSize: 13, color: '#222', marginLeft: 8 }}>{row.label}</Text>
+                </View>
+              ))}
+            </Card>
+          )}
+
+          {OUT_FIELDS.map((field) => (
+            <Input
+              key={field.key}
+              placeholder={field.placeholder}
+              leftIcon={<Icon name={field.icon} type="material-community" size={20} color="#E53935" />}
+              value={form[field.key]}
+              onChangeText={(v) => update(field.key, v)}
+              keyboardType={field.keyboard}
+              containerStyle={stylesForm.inputContainer}
+            />
+          ))}
+
+          <Button
+            title="Submit Gate Out"
+            onPress={handleSubmit}
+            loading={loading}
+            disabled={loading}
+            buttonStyle={[stylesForm.btn, { backgroundColor: '#E53935' }]}
+            titleStyle={stylesForm.btnText}
+            icon={<Icon name="logout" type="material-community" size={20} color="#fff" />}
+            iconRight
           />
-        ))}
+        </Card>
+      </ScrollView>
 
-        <Button
-          title="Submit Gate Out"
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={loading}
-          buttonStyle={[stylesForm.btn, { backgroundColor: '#E53935' }]}
-          titleStyle={stylesForm.btnText}
-          icon={<Icon name="logout" type="material-community" size={20} color="#fff" />}
-          iconRight
-        />
-      </Card>
-    </ScrollView>
+      <QRScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleScan}
+        title="Scan Gate Out QR"
+      />
+    </>
   );
 }
 
@@ -671,34 +887,62 @@ const stylesForm = StyleSheet.create({
   inputContainer: { paddingHorizontal: 0, marginBottom: 12 },
   btn: { borderRadius: 10, paddingVertical: 12, marginTop: 8 },
   btnText: { fontSize: 16, fontWeight: 'bold', marginRight: 8 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { borderRadius: 16, padding: 20, alignItems: 'center', width: '80%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 12, textAlign: 'center', color: '#333' },
+  modalText: { fontSize: 14, color: '#666', marginTop: 8, textAlign: 'center' },
 });
 
 // ============================================
-// Stock Screen
+// Stock Screen with Camera & Multi-Scan
 // ============================================
 function StockScreen({ navigation }) {
   const LOCATIONS = [
-    'Bay 1', 'Bay 2', 'Bay 3', 'Bay 4',
-    'Wash Bay', 'Service Bay', 'Parking',
+    'Workshop', 'Car Parking', 'Outside Parking', 'Yard A', 'Yard B',
     'Road Test', 'Vehicle Refuel', 'OSL Work',
   ];
-  const [scans, setScans] = useState(['']);
   const [location, setLocation] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scannedItems, setScannedItems] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [tempScan, setTempScan] = useState('');
 
-  const addScan = () => setScans((s) => [...s, '']);
-  const removeScan = (i) => setScans((s) => s.filter((_, idx) => idx !== i));
-  const updateScan = (i, v) => setScans((s) => s.map((x, idx) => (idx === i ? v : x)));
   const needsName = ['Road Test', 'Vehicle Refuel', 'OSL Work'].includes(location);
 
+  const handleScan = (data) => {
+    // Check for duplicate
+    if (scannedItems.includes(data)) {
+      Alert.alert('Duplicate Scan', 'This QR code has already been scanned.');
+      if (Platform.OS !== 'web' && Vibration) {
+        Vibration.vibrate([100, 50, 100]);
+      }
+      return;
+    }
+    if (Platform.OS !== 'web' && Vibration) {
+      Vibration.vibrate(100);
+    }
+    setScannedItems(prev => [...prev, data]);
+    setTempScan('');
+  };
+
+  const removeScan = (index) => {
+    setScannedItems(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
-    const validScans = scans.filter((s) => s.trim());
-    if (!validScans.length) { Alert.alert('Error', 'Add at least one QR scan'); return; }
+    if (!scannedItems.length) { Alert.alert('Error', 'Add at least one QR scan'); return; }
     if (!location) { Alert.alert('Error', 'Select a location'); return; }
+    if (needsName && !name.trim()) { Alert.alert('Error', 'Please enter your name'); return; }
+    
     setLoading(true);
     try {
-      const res = await updateStock({ scanned_data_list: validScans, location, name });
+      const res = await updateStock({ 
+        scanned_data_list: scannedItems, 
+        location, 
+        name: needsName ? name : '' 
+      });
       if (res.success) {
         Alert.alert('Success ✅', res.message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
       } else {
@@ -711,83 +955,150 @@ function StockScreen({ navigation }) {
     }
   };
 
-  return (
-    <ScrollView style={stylesForm.container} contentContainerStyle={{ padding: 16 }}>
-      <Card containerStyle={stylesForm.card}>
-        <View style={stylesForm.header}>
-          <Icon name="package-variant" type="material-community" size={48} color="#FF9800" />
-          <Text style={[stylesForm.cardTitle, { color: '#FF9800' }]}>Stock Update</Text>
-        </View>
+  const resetStock = () => {
+    setLocation('');
+    setName('');
+    setScannedItems([]);
+    setShowForm(false);
+  };
 
-        <Text style={stylesStock.sectionLabel}>QR Scans</Text>
-        {scans.map((s, i) => (
-          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Input
-              value={s}
-              onChangeText={(v) => updateScan(i, v)}
-              placeholder={`Scan ${i + 1}`}
-              leftIcon={<Icon name="qrcode" type="material-community" size={20} color="#FF9800" />}
-              containerStyle={[stylesForm.inputContainer, { flex: 1, marginRight: 8 }]}
-            />
-            {scans.length > 1 && (
-              <TouchableOpacity onPress={() => removeScan(i)}>
-                <Icon name="delete" type="material-community" size={24} color="#E53935" />
-              </TouchableOpacity>
-            )}
+  const selectLocation = (loc) => {
+    setLocation(loc);
+    setShowForm(true);
+  };
+
+  if (!showForm) {
+    return (
+      <ScrollView style={stylesStock.container} contentContainerStyle={{ padding: 16 }}>
+        <Card containerStyle={stylesForm.card}>
+          <View style={stylesForm.header}>
+            <Icon name="package-variant" type="material-community" size={48} color="#FF9800" />
+            <Text style={[stylesForm.cardTitle, { color: '#FF9800' }]}>Stock Update</Text>
           </View>
-        ))}
-
-        <Button
-          title="+ Add Another Scan"
-          type="outline"
-          onPress={addScan}
-          buttonStyle={{ borderColor: '#1a73e8', marginVertical: 8 }}
-          titleStyle={{ color: '#1a73e8' }}
-        />
-
-        <Text style={[stylesStock.sectionLabel, { marginTop: 16 }]}>Location *</Text>
-        <View style={stylesStock.locationGrid}>
-          {LOCATIONS.map((loc) => (
-            <Chip
-              key={loc}
-              title={loc}
-              type={location === loc ? 'solid' : 'outline'}
-              onPress={() => setLocation(loc)}
-              containerStyle={{ margin: 3 }}
-              buttonStyle={location === loc ? { backgroundColor: '#1a73e8' } : { borderColor: '#1a73e8' }}
-              titleStyle={location === loc ? { color: '#fff' } : { color: '#1a73e8' }}
-            />
-          ))}
-        </View>
-
-        {needsName && (
-          <Input
-            placeholder="Name / Details *"
-            leftIcon={<Icon name="account" type="material-community" size={20} color="#FF9800" />}
-            value={name}
-            onChangeText={setName}
-            containerStyle={stylesForm.inputContainer}
+          <Text style={stylesStock.sectionLabel}>Select Location *</Text>
+          <View style={stylesStock.locationGrid}>
+            {LOCATIONS.map((loc) => (
+              <Chip
+                key={loc}
+                title={loc}
+                type="outline"
+                onPress={() => selectLocation(loc)}
+                containerStyle={{ margin: 3 }}
+                buttonStyle={{ borderColor: '#FF9800' }}
+                titleStyle={{ color: '#FF9800' }}
+              />
+            ))}
+          </View>
+          <Button
+            title="Cancel"
+            type="outline"
+            onPress={() => navigation.goBack()}
+            buttonStyle={{ marginTop: 16 }}
           />
-        )}
+        </Card>
+      </ScrollView>
+    );
+  }
 
-        <Button
-          title="Update Stock"
-          onPress={handleSubmit}
-          loading={loading}
-          disabled={loading}
-          buttonStyle={[stylesForm.btn, { backgroundColor: '#FF9800' }]}
-          titleStyle={stylesForm.btnText}
-          icon={<Icon name="package-up" type="material-community" size={20} color="#fff" />}
-          iconRight
-        />
-      </Card>
-    </ScrollView>
+  return (
+    <>
+      <ScrollView style={stylesStock.container} contentContainerStyle={{ padding: 16 }}>
+        <Card containerStyle={stylesForm.card}>
+          <View style={stylesForm.header}>
+            <Icon name="package-variant" type="material-community" size={48} color="#FF9800" />
+            <Text style={[stylesForm.cardTitle, { color: '#FF9800' }]}>Stock Update</Text>
+            <Chip title={location} containerStyle={{ marginTop: 8 }} buttonStyle={{ backgroundColor: '#FF9800' }} />
+          </View>
+
+          {/* Scanned Items List */}
+          <Text style={stylesStock.sectionLabel}>Scanned QR Codes ({scannedItems.length})</Text>
+          {scannedItems.length === 0 ? (
+            <Text style={{ color: '#aaa', textAlign: 'center', marginVertical: 12 }}>No scans yet. Tap "Scan QR" to add.</Text>
+          ) : (
+            <View style={stylesStock.scannedList}>
+              {scannedItems.map((item, index) => (
+                <View key={index} style={stylesStock.scannedItem}>
+                  <View style={stylesStock.scannedItemInfo}>
+                    <Text style={stylesStock.scannedItemNumber}>{index + 1}.</Text>
+                    <Text style={stylesStock.scannedItemText} numberOfLines={1}>{item}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeScan(index)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Icon name="delete" type="material-community" size={20} color="#E53935" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Button
+            title="Scan QR Code"
+            onPress={() => setScannerVisible(true)}
+            buttonStyle={{ backgroundColor: '#FF9800', borderRadius: 10, marginVertical: 12 }}
+            icon={<Icon name="qrcode-scan" type="material-community" size={20} color="#fff" />}
+          />
+
+          {needsName && (
+            <Input
+              placeholder="Your Name *"
+              leftIcon={<Icon name="account" type="material-community" size={20} color="#FF9800" />}
+              value={name}
+              onChangeText={setName}
+              containerStyle={stylesForm.inputContainer}
+            />
+          )}
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+            <Button
+              title="Back"
+              type="outline"
+              onPress={resetStock}
+              containerStyle={{ flex: 1, marginRight: 8 }}
+            />
+            <Button
+              title="Submit"
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={loading || scannedItems.length === 0}
+              buttonStyle={{ backgroundColor: '#FF9800' }}
+              containerStyle={{ flex: 1, marginLeft: 8 }}
+            />
+          </View>
+        </Card>
+      </ScrollView>
+
+      <QRScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleScan}
+        title="Scan Stock QR"
+      />
+    </>
   );
 }
 
 const stylesStock = StyleSheet.create({
-  sectionLabel: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 8 },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  sectionLabel: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 8, marginTop: 8 },
   locationGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  scannedList: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 8,
+    maxHeight: 200,
+    marginBottom: 12,
+  },
+  scannedItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  scannedItemInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  scannedItemNumber: { fontWeight: 'bold', color: '#FF9800', width: 30 },
+  scannedItemText: { fontSize: 13, color: '#333', flex: 1 },
 });
 
 // ============================================
