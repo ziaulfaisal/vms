@@ -2,7 +2,7 @@
   "expo": {
     "name": "VMS",
     "slug": "vhs",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "https://ametnaoe.pythonanywhere.com/static/image/1000055212.jpeg",
     "userInterfaceStyle": "light",
