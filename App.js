@@ -45,7 +45,7 @@ async function checkForOTAUpdate() {
 // ============================================
 // API Service
 // ============================================
-const BASE_URL = 'https://digitalizationproject2k25.pythonanywhere.com';
+const BASE_URL = 'https://digitalizationproject2k25.pythonanywhere.cm';
 
 let authToken = null;
 
