@@ -397,7 +397,7 @@ function LoginScreen({ navigation }) {
       <Card containerStyle={stylesLogin.card}>
         <View style={stylesLogin.header}>
           <Icon name="car" type="material-community" size={60} color="#1a73e8" />
-          <Text style={stylesLogin.title}>VMSx</Text>
+          <Text style={stylesLogin.title}>VMS</Text>
           <Text style={stylesLogin.subtitle}>Vehicle Management System</Text>
         </View>
         <Input placeholder="Username" leftIcon={<Icon name="account" type="material-community" size={20} color="#1a73e8" />} value={username} onChangeText={setUsername} containerStyle={stylesLogin.inputContainer} inputStyle={stylesLogin.input} autoCapitalize="none" />
