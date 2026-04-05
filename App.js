@@ -1,5 +1,5 @@
 // App.js - Vehicle Management System with Camera QR Scanning
-// Works with Expo SDK 51
+// Works with Expo SDK 50
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
@@ -24,7 +24,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Icon, Card, Button, Input, Chip, Badge } from 'react-native-elements';
 import * as Updates from 'expo-updates';
-import { Camera, CameraView } from 'expo-camera';
+import { Camera, CameraType } from 'expo-camera';
 
 // ============================================
 // OTA UPDATE HANDLER
@@ -45,7 +45,7 @@ async function checkForOTAUpdate() {
 // ============================================
 // API Service
 // ============================================
-const BASE_URL = 'https://digitalizationproject2k25.pythonanywhere.cm';
+const BASE_URL = 'https://digitalizationproject2k25.pythonanywhere.com';
 
 let authToken = null;
 
@@ -240,13 +240,13 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={stylesScanner.fullScreen}>
-        <CameraView
+        <Camera
           style={stylesScanner.camera}
-          facing="back"
-          onBarcodeScanned={handleBarCodeScanned}
-          enableTorch={torchOn}
-          barcodeScannerSettings={{
-            barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'pdf417', 'aztec'],
+          type={CameraType.back}
+          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+          flashMode={torchOn ? Camera.Constants.FlashMode.torch : Camera.Constants.FlashMode.off}
+          barCodeScannerSettings={{
+            barCodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'pdf417', 'aztec'],
           }}
         >
           <View style={stylesScanner.overlay}>
@@ -270,7 +270,7 @@ function QRScannerModal({ visible, onClose, onScan, title = "Scan QR Code" }) {
               </TouchableOpacity>
             </View>
           </View>
-        </CameraView>
+        </Camera>
       </View>
     </Modal>
   );
@@ -518,7 +518,7 @@ function DashboardScreen({ navigation }) {
     >
       <View style={stylesDash.header}>
         <View>
-          <Text style={stylesDash.greeting}>Hell o, {user?.name || 'User'} 👋</Text>
+          <Text style={stylesDash.greeting}>Hello, {user?.name || 'User'} 👋</Text>
           <Chip
             title={user?.role || 'Guest'}
             type="outline"
